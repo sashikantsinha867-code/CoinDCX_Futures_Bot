@@ -35,6 +35,7 @@ def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit
     if signal == "BUY" and position is None:
 
         position = {
+            "side": "LONG",
             "entry": float(entry_price),
             "qty": float(quantity),
             "sl": float(stop_loss),

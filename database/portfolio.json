@@ -1,7 +1,7 @@
 {
-    "balance": 5000,
-    "total_trades": 0,
-    "wins": 0,
-    "losses": 0,
-    "total_pnl": 0
+    "balance": 5100.000008738183,
+    "total_trades": 2,
+    "wins": 1,
+    "losses": 1,
+    "total_pnl": 100.00000873818274
 }
