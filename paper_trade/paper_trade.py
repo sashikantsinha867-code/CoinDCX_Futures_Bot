@@ -68,13 +68,57 @@ def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit
         )
 
         return
+    
+
+    # ==========================
+    # SHORT ENTRY
+    # ==========================
+    if signal == "SELL" and position is None:
+
+        position = {
+            "side": "SHORT",
+            "entry": float(entry_price),
+            "qty": float(quantity),
+            "sl": float(stop_loss),
+            "tp": float(take_profit)
+        }
+
+        save_position(position)
+
+        log_trade(
+            "SELL",
+            entry_price,
+            0,
+            quantity,
+            0,
+            balance
+        )
+
+        print("\n🔴 PAPER SHORT EXECUTED")
+        print(position)
+
+        send_telegram_message(
+            f"""
+🔴 <b>SHORT EXECUTED</b>
+
+💰 Entry : {entry_price:.2f}
+📦 Qty : {quantity}
+🛑 Stop Loss : {stop_loss:.2f}
+🎯 Take Profit : {take_profit:.2f}
+"""
+        )
+
+        return
 
     # ==========================
     # POSITION OPEN
     # ==========================
     if position is not None:
 
-        unrealized_pnl = (entry_price - position["entry"]) * position["qty"]
+        if position["side"] == "LONG":
+             unrealized_pnl = (entry_price - position["entry"]) * position["qty"]
+        else:
+             unrealized_pnl = (position["entry"] - entry_price) * position["qty"]
 
         print("\n📈 Position Still Open")
         print(position)
@@ -85,15 +129,23 @@ def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit
         # ==========================
         # STOP LOSS
         # ==========================
-        if low <= position["sl"]:
+        if (
+            (position["side"] == "LONG" and low <= position["sl"]) or
+            (position["side"] == "SHORT" and high >= position["sl"])
+        ):
 
-            pnl = (position["sl"] - position["entry"]) * position["qty"]
+            if position["side"] == "LONG":
+                pnl = (position["sl"] - position["entry"]) * position["qty"]
+                trade_type = "SELL_SL"
+            else:
+                pnl = (position["entry"] - position["sl"]) * position["qty"]
+                trade_type = "BUY_SL"
 
             portfolio = update_portfolio(pnl)
             balance = portfolio["balance"]
 
             log_trade(
-                "SELL_SL",
+                trade_type,
                 position["entry"],
                 position["sl"],
                 position["qty"],
@@ -107,7 +159,7 @@ def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit
 
             send_telegram_message(
                 f"""
-🔴 <b>STOP LOSS HIT</b>
+🛑 <b>STOP LOSS HIT</b>
 
 💸 Loss : {pnl:.2f}
 
@@ -117,21 +169,28 @@ def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit
 
             position = None
             save_position(None)
-
             return
 
         # ==========================
         # TAKE PROFIT
         # ==========================
-        if high >= position["tp"]:
+        if (
+            (position["side"] == "LONG" and high >= position["tp"]) or
+            (position["side"] == "SHORT" and low <= position["tp"])
+        ):
 
-            pnl = (position["tp"] - position["entry"]) * position["qty"]
+            if position["side"] == "LONG":
+                pnl = (position["tp"] - position["entry"]) * position["qty"]
+                trade_type = "SELL_TP"
+            else:
+                pnl = (position["entry"] - position["tp"]) * position["qty"]
+                trade_type = "BUY_TP"
 
             portfolio = update_portfolio(pnl)
             balance = portfolio["balance"]
 
             log_trade(
-                "SELL_TP",
+                trade_type,
                 position["entry"],
                 position["tp"],
                 position["qty"],
@@ -145,7 +204,7 @@ def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit
 
             send_telegram_message(
                 f"""
-🟢 <b>TAKE PROFIT HIT</b>
+🎯 <b>TAKE PROFIT HIT</b>
 
 💰 Profit : {pnl:.2f}
 
@@ -155,5 +214,4 @@ def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit
 
             position = None
             save_position(None)
-
-            return
+            return  
