@@ -39,3 +39,7 @@ def update_portfolio(pnl):
     save_portfolio(portfolio)
 
     return portfolio
+
+def get_balance():
+    portfolio = load_portfolio()
+    return portfolio["balance"]

@@ -3,169 +3,176 @@ import os
 
 from utils.logger import log_trade
 from utils.telegram import send_telegram_message
-from paper_trade.portfolio import update_portfolio
+from paper_trade.portfolio import update_portfolio, get_balance
 
 STATE_FILE = "database/state.json"
-
 
 def load_position():
     if not os.path.exists(STATE_FILE):
         return None
-
     with open(STATE_FILE, "r") as f:
         return json.load(f)
-
 
 def save_position(position):
     with open(STATE_FILE, "w") as f:
         json.dump(position, f, indent=4)
 
-
 balance = 5000
 position = load_position()
-
 
 def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit):
     global position
     global balance
 
+    position = load_position()
+    try:
+        balance = get_balance()
+    except:
+        pass
+
+def calculate_pnl(side, entry_price, exit_price, qty):
+    """
+    Returns positive value for profit
+    Returns negative value for loss
+    """
+
+    if side == "LONG":
+        return (exit_price - entry_price) * qty
+    else:
+        return (entry_price - exit_price) * qty    
+
+    entry_price, quantity, stop_loss, take_profit = map(float, [entry_price, quantity, stop_loss, take_profit])
+    risk = abs(entry_price - stop_loss) # 1R
+
     # ==========================
-    # BUY
+    # BUY ENTRY
     # ==========================
     if signal == "BUY" and position is None:
-
         position = {
-            "side": "LONG",
-            "entry": float(entry_price),
-            "qty": float(quantity),
-            "sl": float(stop_loss),
-            "tp": float(take_profit)
+            "side": "LONG", "entry": entry_price, "qty": quantity,
+            "sl": stop_loss, "tp": take_profit,
+            "highest_price": entry_price, "lowest_price": entry_price,
+            "breakeven_done": False,  # FIX: added comma
         }
-
         save_position(position)
-
-        log_trade(
-            "BUY",
-            entry_price,
-            0,
-            quantity,
-            0,
-            balance
-        )
-
+        log_trade("BUY", entry_price, 0, quantity, 0, balance)
         print("\n✅ PAPER BUY EXECUTED")
-        print(position)
-
-        send_telegram_message(
-            f"""
-🟢 <b>BUY EXECUTED</b>
-
+        send_telegram_message(f"""🟢 <b>BUY EXECUTED</b>
 💰 Entry : {entry_price:.2f}
 📦 Qty : {quantity}
 🛑 Stop Loss : {stop_loss:.2f}
-🎯 Take Profit : {take_profit:.2f}
-"""
-        )
-
+🎯 Take Profit : {take_profit:.2f}""")
         return
-    
 
     # ==========================
     # SHORT ENTRY
     # ==========================
     if signal == "SELL" and position is None:
-
         position = {
-            "side": "SHORT",
-            "entry": float(entry_price),
-            "qty": float(quantity),
-            "sl": float(stop_loss),
-            "tp": float(take_profit)
+            "side": "SHORT", "entry": entry_price, "qty": quantity,
+            "sl": stop_loss, "tp": take_profit,
+            "highest_price": entry_price, "lowest_price": entry_price,
+            "breakeven_done": False,  # FIX: added comma
         }
-
         save_position(position)
-
-        log_trade(
-            "SELL",
-            entry_price,
-            0,
-            quantity,
-            0,
-            balance
-        )
-
+        log_trade("SELL", entry_price, 0, quantity, 0, balance)
         print("\n🔴 PAPER SHORT EXECUTED")
-        print(position)
-
-        send_telegram_message(
-            f"""
-🔴 <b>SHORT EXECUTED</b>
-
+        send_telegram_message(f"""🔴 <b>SHORT EXECUTED</b>
 💰 Entry : {entry_price:.2f}
 📦 Qty : {quantity}
 🛑 Stop Loss : {stop_loss:.2f}
-🎯 Take Profit : {take_profit:.2f}
-"""
-        )
-
+🎯 Take Profit : {take_profit:.2f}""")
         return
 
     # ==========================
-    # POSITION OPEN
+    # POSITION MANAGEMENT
     # ==========================
     if position is not None:
-
+        # Update trailing highs/lows
         if position["side"] == "LONG":
-             unrealized_pnl = (entry_price - position["entry"]) * position["qty"]
-        else:
-             unrealized_pnl = (position["entry"] - entry_price) * position["qty"]
+            position["highest_price"] = max(position["highest_price"], high)
+            unrealized_pnl = (entry_price - position["entry"]) * position["qty"]
+        else:  # SHORT
+            position["lowest_price"] = min(position["lowest_price"], low)
+            unrealized_pnl = (position["entry"] - entry_price) * position["qty"]
+
+        # ==========================
+        # BREAKEVEN + TRAILING STOP LOGIC
+        # ==========================
+        trail_triggered = False
+        msg = ""
+        
+        if position["side"] == "LONG":
+            profit = position["highest_price"] - position["entry"]
+            
+            # 1. Move to Breakeven at 1R
+            if not position["breakeven_done"] and profit >= risk:
+                position["sl"] = round(position["entry"] + 0.5, 2) # BE + buffer
+                position["breakeven_done"] = True
+                trail_triggered = True
+                msg = f"🔄 <b>BREAKEVEN HIT - LONG</b>\n\nSL moved to: {position['sl']:.2f}"
+
+            # 2. Trail 50% of profit after BE
+            elif position["breakeven_done"] and profit > 0:
+                new_sl = position["entry"] + (profit * 0.50)
+                new_sl = min(new_sl, entry_price - 0.5)
+                if new_sl > position["sl"]:
+                    old_sl = position["sl"]
+                    position["sl"] = round(new_sl, 2)
+                    trail_triggered = True
+                    msg = f"🔄 <b>TRAILING SL UPDATED - LONG</b>\n\nOld SL : {old_sl:.2f}\nNew SL : {position['sl']:.2f}"
+
+        else:  # SHORT
+            profit = position["entry"] - position["lowest_price"]
+
+            # 1. Move to Breakeven at 1R
+            if not position["breakeven_done"] and profit >= risk:
+                position["sl"] = round(position["entry"] - 0.5, 2)
+                position["breakeven_done"] = True
+                trail_triggered = True
+                msg = f"🔄 <b>BREAKEVEN HIT - SHORT</b>\n\nSL moved to: {position['sl']:.2f}"
+
+            # 2. Trail 50% of profit after BE
+            elif position["breakeven_done"] and profit > 0:
+                new_sl = position["entry"] - (profit * 0.50)
+                new_sl = max(new_sl, entry_price + 0.5)
+                if new_sl < position["sl"]:
+                    old_sl = position["sl"]
+                    position["sl"] = round(new_sl, 2)
+                    trail_triggered = True
+                    msg = f"🔄 <b>TRAILING SL UPDATED - SHORT</b>\n\nOld SL : {old_sl:.2f}\nNew SL : {position['sl']:.2f}"
+
+        if trail_triggered:
+            save_position(position)
+            print(f"\n🔄 SL UPDATED : {position['sl']:.2f}")
+            send_telegram_message(msg)
+
+        save_position(position)
 
         print("\n📈 Position Still Open")
-        print(position)
-
-        print(f"\nCurrent Price : {entry_price:.2f}")
+        print(f"Current Price : {entry_price:.2f}")
+        print(f"Current SL    : {position['sl']:.2f}")
         print(f"Current PnL   : {unrealized_pnl:.2f}")
 
         # ==========================
         # STOP LOSS
         # ==========================
-        if (
-            (position["side"] == "LONG" and low <= position["sl"]) or
-            (position["side"] == "SHORT" and high >= position["sl"])
-        ):
+        sl_hit = (position["side"] == "LONG" and low <= position["sl"]) or \
+                 (position["side"] == "SHORT" and high >= position["sl"])
 
-            if position["side"] == "LONG":
-                pnl = (position["sl"] - position["entry"]) * position["qty"]
-                trade_type = "SELL_SL"
-            else:
-                pnl = (position["entry"] - position["sl"]) * position["qty"]
-                trade_type = "BUY_SL"
+        if sl_hit:
+            pnl = (position["sl"] - position["entry"]) * position["qty"] if position["side"] == "LONG" \
+                  else (position["entry"] - position["sl"]) * position["qty"]
+            trade_type = "SELL_SL" if position["side"] == "LONG" else "BUY_SL"
 
             portfolio = update_portfolio(pnl)
             balance = portfolio["balance"]
-
-            log_trade(
-                trade_type,
-                position["entry"],
-                position["sl"],
-                position["qty"],
-                pnl,
-                balance
-            )
+            log_trade(trade_type, position["entry"], position["sl"], position["qty"], pnl, balance)
 
             print("\n🛑 STOP LOSS HIT")
-            print(f"PnL : {pnl:.2f}")
-            print(f"Balance : {balance:.2f}")
-
-            send_telegram_message(
-                f"""
-🛑 <b>STOP LOSS HIT</b>
-
+            send_telegram_message(f"""🛑 <b>STOP LOSS HIT</b>
 💸 Loss : {pnl:.2f}
-
-💼 Balance : {balance:.2f}
-"""
-            )
+💼 Balance : {balance:.2f}""")
 
             position = None
             save_position(None)
@@ -174,44 +181,23 @@ def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit
         # ==========================
         # TAKE PROFIT
         # ==========================
-        if (
-            (position["side"] == "LONG" and high >= position["tp"]) or
-            (position["side"] == "SHORT" and low <= position["tp"])
-        ):
+        tp_hit = (position["side"] == "LONG" and high >= position["tp"]) or \
+                 (position["side"] == "SHORT" and low <= position["tp"])
 
-            if position["side"] == "LONG":
-                pnl = (position["tp"] - position["entry"]) * position["qty"]
-                trade_type = "SELL_TP"
-            else:
-                pnl = (position["entry"] - position["tp"]) * position["qty"]
-                trade_type = "BUY_TP"
+        if tp_hit:
+            pnl = (position["tp"] - position["entry"]) * position["qty"] if position["side"] == "LONG" \
+                  else (position["entry"] - position["tp"]) * position["qty"]
+            trade_type = "SELL_TP" if position["side"] == "LONG" else "BUY_TP"
 
             portfolio = update_portfolio(pnl)
             balance = portfolio["balance"]
-
-            log_trade(
-                trade_type,
-                position["entry"],
-                position["tp"],
-                position["qty"],
-                pnl,
-                balance
-            )
+            log_trade(trade_type, position["entry"], position["tp"], position["qty"], pnl, balance)
 
             print("\n🎯 TAKE PROFIT HIT")
-            print(f"PnL : {pnl:.2f}")
-            print(f"Balance : {balance:.2f}")
-
-            send_telegram_message(
-                f"""
-🎯 <b>TAKE PROFIT HIT</b>
-
+            send_telegram_message(f"""🎯 <b>TAKE PROFIT HIT</b>
 💰 Profit : {pnl:.2f}
-
-💼 Balance : {balance:.2f}
-"""
-            )
+💼 Balance : {balance:.2f}""")
 
             position = None
             save_position(None)
-            return  
+            return

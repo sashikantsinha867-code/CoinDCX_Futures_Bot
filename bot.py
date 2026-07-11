@@ -40,6 +40,10 @@ def run_bot():
     # Check Existing Position
     position = load_position()
 
+    print("\n===== DEBUG =====")
+    print("Loaded Position:", position)
+    print("=================")
+
     if position is not None:
 
         print("\n📌 Existing Position Found")
