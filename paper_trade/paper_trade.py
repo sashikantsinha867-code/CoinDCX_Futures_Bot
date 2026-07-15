@@ -17,32 +17,30 @@ def save_position(position):
     with open(STATE_FILE, "w") as f:
         json.dump(position, f, indent=4)
 
-balance = 5000
-position = load_position()
+def calculate_pnl(side, entry_price, exit_price, qty):
+    """Sahi PnL: + for profit, - for loss"""
+    if side == "LONG":
+        return (exit_price - entry_price) * qty
+    else: # SHORT
+        return (entry_price - exit_price) * qty    
 
 def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit):
-    global position
     global balance
 
     position = load_position()
     try:
         balance = get_balance()
     except:
-        pass
-
-def calculate_pnl(side, entry_price, exit_price, qty):
-    """
-    Returns positive value for profit
-    Returns negative value for loss
-    """
-
-    if side == "LONG":
-        return (exit_price - entry_price) * qty
-    else:
-        return (entry_price - exit_price) * qty    
+        balance = 5000 # fallback
 
     entry_price, quantity, stop_loss, take_profit = map(float, [entry_price, quantity, stop_loss, take_profit])
     risk = abs(entry_price - stop_loss) # 1R
+
+    # ==========================
+    # HOLD signal aur koi position nahi hai
+    # ==========================
+    if signal == "HOLD" and position is None:
+        return
 
     # ==========================
     # BUY ENTRY
@@ -52,7 +50,7 @@ def calculate_pnl(side, entry_price, exit_price, qty):
             "side": "LONG", "entry": entry_price, "qty": quantity,
             "sl": stop_loss, "tp": take_profit,
             "highest_price": entry_price, "lowest_price": entry_price,
-            "breakeven_done": False,  # FIX: added comma
+            "breakeven_done": False,
         }
         save_position(position)
         log_trade("BUY", entry_price, 0, quantity, 0, balance)
@@ -72,7 +70,7 @@ def calculate_pnl(side, entry_price, exit_price, qty):
             "side": "SHORT", "entry": entry_price, "qty": quantity,
             "sl": stop_loss, "tp": take_profit,
             "highest_price": entry_price, "lowest_price": entry_price,
-            "breakeven_done": False,  # FIX: added comma
+            "breakeven_done": False,
         }
         save_position(position)
         log_trade("SELL", entry_price, 0, quantity, 0, balance)
@@ -88,13 +86,15 @@ def calculate_pnl(side, entry_price, exit_price, qty):
     # POSITION MANAGEMENT
     # ==========================
     if position is not None:
+        current_price = (high + low) / 2 # Current price estimate
+
         # Update trailing highs/lows
         if position["side"] == "LONG":
             position["highest_price"] = max(position["highest_price"], high)
-            unrealized_pnl = (entry_price - position["entry"]) * position["qty"]
+            unrealized_pnl = (current_price - position["entry"]) * position["qty"]
         else:  # SHORT
             position["lowest_price"] = min(position["lowest_price"], low)
-            unrealized_pnl = (position["entry"] - entry_price) * position["qty"]
+            unrealized_pnl = (position["entry"] - current_price) * position["qty"]
 
         # ==========================
         # BREAKEVEN + TRAILING STOP LOGIC
@@ -105,17 +105,14 @@ def calculate_pnl(side, entry_price, exit_price, qty):
         if position["side"] == "LONG":
             profit = position["highest_price"] - position["entry"]
             
-            # 1. Move to Breakeven at 1R
             if not position["breakeven_done"] and profit >= risk:
-                position["sl"] = round(position["entry"] + 0.5, 2) # BE + buffer
+                position["sl"] = round(position["entry"] + 0.5, 2)
                 position["breakeven_done"] = True
                 trail_triggered = True
                 msg = f"🔄 <b>BREAKEVEN HIT - LONG</b>\n\nSL moved to: {position['sl']:.2f}"
 
-            # 2. Trail 50% of profit after BE
             elif position["breakeven_done"] and profit > 0:
                 new_sl = position["entry"] + (profit * 0.50)
-                new_sl = min(new_sl, entry_price - 0.5)
                 if new_sl > position["sl"]:
                     old_sl = position["sl"]
                     position["sl"] = round(new_sl, 2)
@@ -125,17 +122,14 @@ def calculate_pnl(side, entry_price, exit_price, qty):
         else:  # SHORT
             profit = position["entry"] - position["lowest_price"]
 
-            # 1. Move to Breakeven at 1R
             if not position["breakeven_done"] and profit >= risk:
                 position["sl"] = round(position["entry"] - 0.5, 2)
                 position["breakeven_done"] = True
                 trail_triggered = True
                 msg = f"🔄 <b>BREAKEVEN HIT - SHORT</b>\n\nSL moved to: {position['sl']:.2f}"
 
-            # 2. Trail 50% of profit after BE
             elif position["breakeven_done"] and profit > 0:
                 new_sl = position["entry"] - (profit * 0.50)
-                new_sl = max(new_sl, entry_price + 0.5)
                 if new_sl < position["sl"]:
                     old_sl = position["sl"]
                     position["sl"] = round(new_sl, 2)
@@ -150,7 +144,7 @@ def calculate_pnl(side, entry_price, exit_price, qty):
         save_position(position)
 
         print("\n📈 Position Still Open")
-        print(f"Current Price : {entry_price:.2f}")
+        print(f"Current Price : {current_price:.2f}")
         print(f"Current SL    : {position['sl']:.2f}")
         print(f"Current PnL   : {unrealized_pnl:.2f}")
 
@@ -161,8 +155,8 @@ def calculate_pnl(side, entry_price, exit_price, qty):
                  (position["side"] == "SHORT" and high >= position["sl"])
 
         if sl_hit:
-            pnl = (position["sl"] - position["entry"]) * position["qty"] if position["side"] == "LONG" \
-                  else (position["entry"] - position["sl"]) * position["qty"]
+            pnl = calculate_pnl(position["side"], position["entry"], position["sl"], position["qty"])
+            pnl = -abs(pnl) # Safety: SL par hamesha loss
             trade_type = "SELL_SL" if position["side"] == "LONG" else "BUY_SL"
 
             portfolio = update_portfolio(pnl)
@@ -185,8 +179,7 @@ def calculate_pnl(side, entry_price, exit_price, qty):
                  (position["side"] == "SHORT" and low <= position["tp"])
 
         if tp_hit:
-            pnl = (position["tp"] - position["entry"]) * position["qty"] if position["side"] == "LONG" \
-                  else (position["entry"] - position["tp"]) * position["qty"]
+            pnl = calculate_pnl(position["side"], position["entry"], position["tp"], position["qty"])
             trade_type = "SELL_TP" if position["side"] == "LONG" else "BUY_TP"
 
             portfolio = update_portfolio(pnl)

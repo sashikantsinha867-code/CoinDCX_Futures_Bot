@@ -5,7 +5,6 @@ from strategy.risk import calculate_position_size
 from paper_trade.paper_trade import paper_trade, load_position
 from config import CAPITAL, RISK_PERCENT, TEST_MODE
 
-
 def run_bot():
 
     print("=" * 50)
@@ -45,7 +44,6 @@ def run_bot():
     print("=================")
 
     if position is not None:
-
         print("\n📌 Existing Position Found")
 
         paper_trade(
@@ -57,19 +55,27 @@ def run_bot():
             position["sl"],
             position["tp"]
         )
-
         return
 
     # Generate Signal
     trade_signal = generate_signal(df)
 
     if TEST_MODE:
-        print("\n🧪 TEST MODE ENABLED")
+        print("\n🧪 TEST MODE ENABLED - Forcing BUY")
         trade_signal = "BUY"
 
-    # Risk
-    sl = entry - (last["ATR"] * 1.5)
-    tp = entry + ((entry - sl) * 2)
+    # Risk - RR 1:2 for BOTH LONG AND SHORT
+    atr = last["ATR"]
+    
+    if trade_signal == "BUY":
+        sl = entry - (atr * 1.5)
+        tp = entry + ((entry - sl) * 2)  # TP upar
+    elif trade_signal == "SELL":
+        sl = entry + (atr * 1.5) 
+        tp = entry - ((sl - entry) * 2)  # TP neeche
+    else:
+        print("No Signal")
+        return
 
     qty = calculate_position_size(
         capital=CAPITAL,
@@ -85,7 +91,9 @@ def run_bot():
     print(f"Entry  : {entry:.2f}")
     print(f"SL     : {sl:.2f}")
     print(f"TP     : {tp:.2f}")
-    print(f"Qty    : {qty}")
+    print(f"Risk   : {abs(entry-sl):.2f}")
+    print(f"Reward : {abs(tp-entry):.2f}")
+    print(f"Qty    : {qty:.6f}")
 
     paper_trade(
         trade_signal,

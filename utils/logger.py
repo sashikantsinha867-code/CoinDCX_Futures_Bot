@@ -6,14 +6,13 @@ LOG_FILE = "logs/trades.csv"
 
 
 def log_trade(signal, entry, exit_price, quantity, pnl, balance):
-
     file_exists = os.path.exists(LOG_FILE)
 
-    with open(LOG_FILE, "a", newline="") as file:
+    pnl_percent = (pnl / balance * 100) if balance > 0 else 0
 
+    with open(LOG_FILE, "a", newline="") as file:
         writer = csv.writer(file)
 
-        # Agar file nayi hai to header likho
         if not file_exists or os.path.getsize(LOG_FILE) == 0:
             writer.writerow([
                 "Date",
@@ -22,6 +21,7 @@ def log_trade(signal, entry, exit_price, quantity, pnl, balance):
                 "Exit",
                 "Quantity",
                 "PnL",
+                "PnL%",
                 "Balance"
             ])
 
@@ -32,5 +32,6 @@ def log_trade(signal, entry, exit_price, quantity, pnl, balance):
             round(exit_price, 2),
             round(quantity, 6),
             round(pnl, 2),
+            round(pnl_percent, 2),
             round(balance, 2)
         ])
