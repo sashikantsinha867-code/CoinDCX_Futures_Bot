@@ -173,26 +173,16 @@ def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit
         return
 
     # ==========================
-    # TAKE PROFIT CHECK
+    # TAKE PROFIT (Trailing Mode)
     # ==========================
     tp_hit = (position["side"] == "LONG" and high >= position["tp"]) or \
              (position["side"] == "SHORT" and low <= position["tp"])
 
-    if tp_hit:
-        pnl = calculate_pnl(position["side"], position["entry"], position["tp"], position["qty"])
-        trade_type = "SELL_TP" if position["side"] == "LONG" else "BUY_TP"
+    if tp_hit and not position.get("tp_reached", False):
+        position["tp_reached"]=True
+        send_telegram_message("🎯 TP reached. Trailing Stop Active.")
+        print("\n🎯 TP reached. Trailing continues...")
 
-        portfolio = update_portfolio(pnl)
-        balance = portfolio["balance"]
-        log_trade(trade_type, position["entry"], position["tp"], position["qty"], pnl, balance)
-
-        print(f"\n🎯 TAKE PROFIT HIT @ {position['tp']:.2f} | Profit: {pnl:.2f}")
-        send_telegram_message(f"""🎯 <b>TAKE PROFIT HIT</b>
-💰 Profit : {pnl:.2f}
-💼 Balance : {balance:.2f}""")
-
-        save_position(None)
-        return
         
     # ==========================
     # POSITION STILL OPEN
