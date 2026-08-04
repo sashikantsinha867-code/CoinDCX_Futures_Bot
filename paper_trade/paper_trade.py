@@ -87,36 +87,43 @@ def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit
         position["lowest_price"] = min(position["lowest_price"], low)
         unrealized_pnl = (position["entry"] - current_price) * position["qty"]
 
-    # BREAKEVEN + TRAILING
+       # BREAKEVEN + TRAILING
     trail_triggered = False
     msg = ""
-    
+
     if position["side"] == "LONG":
         profit = position["highest_price"] - position["entry"]
+
         if not position["breakeven_done"] and profit >= risk:
             position["sl"] = round(position["entry"] + 0.5, 2)
             position["breakeven_done"] = True
             trail_triggered = True
             msg = f"🔄 <b>BREAKEVEN HIT - LONG</b>\n\nSL moved to: {position['sl']:.2f}"
+
         elif position["breakeven_done"] and profit > 0:
-            new_sl = position["entry"] + (profit * 0.50)
+            new_sl = round(position["entry"] + (profit * 0.50), 2)
+
             if new_sl > position["sl"]:
                 old_sl = position["sl"]
-                position["sl"] = round(new_sl, 2)
+                position["sl"] = new_sl
                 trail_triggered = True
                 msg = f"🔄 <b>TRAILING SL UPDATED - LONG</b>\n\nOld SL : {old_sl:.2f}\nNew SL : {position['sl']:.2f}"
+
     else: # SHORT
         profit = position["entry"] - position["lowest_price"]
+
         if not position["breakeven_done"] and profit >= risk:
             position["sl"] = round(position["entry"] - 0.5, 2)
             position["breakeven_done"] = True
             trail_triggered = True
             msg = f"🔄 <b>BREAKEVEN HIT - SHORT</b>\n\nSL moved to: {position['sl']:.2f}"
+
         elif position["breakeven_done"] and profit > 0:
-            new_sl = position["entry"] - (profit * 0.50)
+            new_sl = round(position["entry"] - (profit * 0.50), 2)
+
             if new_sl < position["sl"]:
                 old_sl = position["sl"]
-                position["sl"] = round(new_sl, 2)
+                position["sl"] = new_sl
                 trail_triggered = True
                 msg = f"🔄 <b>TRAILING SL UPDATED - SHORT</b>\n\nOld SL : {old_sl:.2f}\nNew SL : {position['sl']:.2f}"
 
