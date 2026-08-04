@@ -87,7 +87,7 @@ def paper_trade(signal, entry_price, high, low, quantity, stop_loss, take_profit
         position["lowest_price"] = min(position["lowest_price"], low)
         unrealized_pnl = (position["entry"] - current_price) * position["qty"]
 
-       # BREAKEVEN + TRAILING
+    # BREAKEVEN + TRAILING
     trail_triggered = False
     msg = ""
 
