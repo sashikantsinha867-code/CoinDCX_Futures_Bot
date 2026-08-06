@@ -4,6 +4,7 @@ from strategy.signals import generate_signal
 from strategy.risk import calculate_position_size
 from paper_trade.paper_trade import paper_trade, load_position
 from config import CAPITAL, RISK_PERCENT, TEST_MODE
+from utils.ads_logger import log_ads
 
 def run_bot():
 
@@ -61,9 +62,20 @@ def run_bot():
     entry = float(last["close"])
 
     atr = float(last["ATR"])
-    if atr <= 0:  # <-- ye line 4 space pe la di
+    if atr <= 0:
         print("❌ Invalid ATR")
         return
+
+    # ADS Logger Data
+    ema20 = float(last["EMA20"])
+    ema50 = float(last["EMA50"])
+    rsi = float(last["RSI"])
+    macd = float(last["MACD"])
+    macd_signal = float(last["MACD_SIGNAL"])
+    adx = float(last["ADX"])
+    volume = float(last["volume"])
+    avg_volume = float(last["AVG_VOLUME"])
+    volume_ratio = float(last["VOLUME_RATIO"])    
 
     # ==========================
     # Market Information
@@ -102,6 +114,7 @@ def run_bot():
     # Generate Signal
     # ==========================
     trade_signal = generate_signal(df)
+    reason = "Strategy Signal"
 
     if TEST_MODE:
         print("\n🧪 TEST MODE ENABLED")
@@ -109,6 +122,23 @@ def run_bot():
         # trade_signal = "BUY"
 
     if trade_signal == "HOLD":
+        log_ads(
+            price=entry,
+            ema20=ema20,
+            ema50=ema50,
+            rsi=rsi,
+            macd=macd,
+            macd_signal=macd_signal,
+            adx=adx,
+            atr=atr,
+            volume=volume,
+            avg_volume=avg_volume,
+            volume_ratio=volume_ratio,
+            trend=trend,
+            signal="HOLD",
+            reason=reason
+        )
+
         print("\n========== SIGNAL ==========")
         print("Signal : HOLD")
         return
@@ -119,12 +149,31 @@ def run_bot():
     if trade_signal == "BUY" and not trend_buy:
         print("❌ BUY rejected (1H trend is bearish)")
         trade_signal = "HOLD"
+        reason = "BUY Rejected by 1H Trend"
 
     elif trade_signal == "SELL" and not trend_sell:
         print("❌ SELL rejected (1H trend is bullish)")
         trade_signal = "HOLD"
-    
+        reason = "SELL Rejected by 1H Trend"
+
     if trade_signal == "HOLD":
+        log_ads(
+            price=entry,
+            ema20=ema20,
+            ema50=ema50,
+            rsi=rsi,
+            macd=macd,
+            macd_signal=macd_signal,
+            adx=adx,
+            atr=atr,
+            volume=volume,
+            avg_volume=avg_volume,
+            volume_ratio=volume_ratio,
+            trend=trend,
+            signal="HOLD",
+            reason=reason
+        )
+
         print("\n========== SIGNAL ==========")
         print("Signal : HOLD")
         return
@@ -172,6 +221,23 @@ def run_bot():
     # ==========================
     # Execute Paper Trade
     # ==========================
+    log_ads(
+        price=entry,
+        ema20=ema20,
+        ema50=ema50,
+        rsi=rsi,
+        macd=macd,
+        macd_signal=macd_signal,
+        adx=adx,
+        atr=atr,
+        volume=volume,
+        avg_volume=avg_volume,
+        volume_ratio=volume_ratio,
+        trend=trend,
+        signal=trade_signal,
+        reason=reason
+    )
+
     paper_trade(
         trade_signal,
         entry,
