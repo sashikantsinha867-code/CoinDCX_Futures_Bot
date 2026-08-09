@@ -1,4 +1,3 @@
-```python
 import time
 import schedule
 import traceback
@@ -27,41 +26,29 @@ def safe_run_bot():
         print(f"\n[ERROR] Bot crashed: {e}")
         traceback.print_exc()
 
-        # Telegram alert bhi bhej sakte ho yaha
+        # Telegram alert yahan enable kar sakte ho
         # send_telegram_message(f"⚠️ Bot Crashed: {e}")
 
 
 def start_scheduler():
-
     print("=" * 50)
     print("CoinDCX Auto Scheduler Started")
     print("Strategy Timeframe: 1 Minute")
     print("Strategy: SMA44 + Candle Confirmation + Volume")
     print("=" * 50)
 
-    # ==================================================
-    # RUN BOT EVERY 1 MINUTE
-    # ==================================================
-
+    # Run bot every 1 minute
     schedule.every(1).minute.do(safe_run_bot)
 
-    # ==================================================
-    # RUN ONCE IMMEDIATELY WHEN BOT STARTS
-    # ==================================================
-
+    # Run once immediately when bot starts
     safe_run_bot()
 
-    # ==================================================
-    # SCHEDULER LOOP
-    # ==================================================
-
+    # Scheduler loop
     while True:
         schedule.run_pending()
-
-        # Check scheduler every 5 seconds
         time.sleep(5)
 
 
 if __name__ == "__main__":
     start_scheduler()
-```
+
