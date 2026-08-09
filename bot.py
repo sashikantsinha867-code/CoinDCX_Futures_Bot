@@ -1,3 +1,4 @@
+```python
 from data.market_data import get_market_data
 from strategy.indicators import add_indicators
 from strategy.signals import generate_signal
@@ -6,67 +7,71 @@ from paper_trade.paper_trade import paper_trade, load_position
 from config import CAPITAL, RISK_PERCENT, TEST_MODE
 from utils.ads_logger import log_ads
 
+
 def run_bot():
 
     print("=" * 50)
     print("CoinDCX Futures Trading Bot")
+    print("Strategy: 1M SMA44 + Candle Confirmation + Volume")
     print("=" * 50)
 
-    # ==========================
-    # 15 Minute Market Data
-    # ==========================
-    df = get_market_data("15m")
+    # ==================================================
+    # 1 MINUTE MARKET DATA
+    # ==================================================
+
+    df = get_market_data(
+        interval="1m",
+        pair="B-BTC_USDT",
+        limit=200
+    )
 
     if df is None or df.empty:
-        print("❌ Failed to fetch 15m market data.")
+        print("❌ Failed to fetch 1m market data.")
         return
+
+    # ==================================================
+    # INDICATORS
+    # ==================================================
+    #
+    # add_indicators() is still used because ATR,
+    # volume information and existing logging/risk
+    # calculations depend on it.
+    #
+    # SMA44 itself is calculated inside strategy.py.
 
     df = add_indicators(df)
 
-    # ==========================
-    # 1 Hour Market Data
-    # ==========================
-    df_1h = get_market_data("1h")
+    # ==================================================
+    # LAST 1-MINUTE CANDLE
+    # ==================================================
 
-    if df_1h is None or df_1h.empty:
-        print("❌ Failed to fetch 1H market data.")
-        return
-
-    df_1h = add_indicators(df_1h)
-
-    last_1h = df_1h.iloc[-1]
-
-    trend_buy = last_1h["EMA20"] > last_1h["EMA50"]
-    trend_sell = last_1h["EMA20"] < last_1h["EMA50"]
-
-    print("\n========== HIGHER TIMEFRAME ==========")
-    print(f"1H EMA20 : {last_1h['EMA20']:.2f}")
-    print(f"1H EMA50 : {last_1h['EMA50']:.2f}")
-
-    if trend_buy:
-        trend = "BULLISH"
-    elif trend_sell:
-        trend = "BEARISH"
-    else:
-        trend = "SIDEWAYS"
-
-    print(f"Trend    : {trend}")
-
-    # ==========================
-    # Indicators - 15m
-    # ==========================
     last = df.iloc[-1]
 
     high = float(last["high"])
     low = float(last["low"])
     entry = float(last["close"])
 
+    # ==================================================
+    # ATR FOR EXISTING SL/TP
+    # ==================================================
+
+    if "ATR" not in df.columns:
+        print("❌ ATR not available.")
+        return
+
     atr = float(last["ATR"])
+
     if atr <= 0:
         print("❌ Invalid ATR")
         return
 
-    # ADS Logger Data
+    # ==================================================
+    # EXISTING INDICATOR DATA
+    # ==================================================
+    #
+    # These are kept for ADS logger compatibility.
+    # They are NOT used for generating the SMA44 signal.
+
     ema20 = float(last["EMA20"])
     ema50 = float(last["EMA50"])
     rsi = float(last["RSI"])
@@ -75,22 +80,24 @@ def run_bot():
     adx = float(last["ADX"])
     volume = float(last["volume"])
     avg_volume = float(last["AVG_VOLUME"])
-    volume_ratio = float(last["VOLUME_RATIO"])    
+    volume_ratio = float(last["VOLUME_RATIO"])
 
-    # ==========================
-    # Market Information
-    # ==========================
-    print("\n========== MARKET ==========")
-    print(f"Price  : {entry:.2f}")
-    print(f"EMA20  : {last['EMA20']:.2f}")
-    print(f"EMA50  : {last['EMA50']:.2f}")
-    print(f"RSI    : {last['RSI']:.2f}")
-    print(f"MACD   : {last['MACD']:.2f}")
-    print(f"ATR    : {atr:.2f}")
+    # ==================================================
+    # MARKET INFORMATION
+    # ==================================================
 
-    # ==========================
-    # Existing Position
-    # ==========================
+    print("\n========== 1M MARKET ==========")
+    print(f"Price      : {entry:.2f}")
+    print(f"SMA44      : {df['close'].rolling(44).mean().iloc[-1]:.2f}")
+    print(f"Volume     : {volume:.2f}")
+    print(f"Avg Volume : {avg_volume:.2f}")
+    print(f"Vol Ratio  : {volume_ratio:.2f}")
+    print(f"ATR        : {atr:.2f}")
+
+    # ==================================================
+    # EXISTING POSITION
+    # ==================================================
+
     position = load_position()
 
     print("\n===== DEBUG =====")
@@ -98,7 +105,12 @@ def run_bot():
     print("=================")
 
     if position:
+
         print("\n📌 Existing Position Found")
+
+        # Existing SL / TP / Breakeven /
+        # Trailing SL logic remains inside paper_trade()
+
         paper_trade(
             "HOLD",
             entry,
@@ -108,20 +120,37 @@ def run_bot():
             position["sl"],
             position["tp"]
         )
+
         return
 
-    # ==========================
-    # Generate Signal
-    # ==========================
+    # ==================================================
+    # GENERATE SMA44 SIGNAL
+    # ==================================================
+
     trade_signal = generate_signal(df)
-    reason = "Strategy Signal"
+
+    reason = "SMA44 + Candle Confirmation + Volume"
+
+    # ==================================================
+    # TEST MODE
+    # ==================================================
 
     if TEST_MODE:
+
         print("\n🧪 TEST MODE ENABLED")
-        # Agar force BUY karna ho to next line uncomment karo
+
+        # Agar force BUY karna ho:
         # trade_signal = "BUY"
 
+        # Agar force SELL karna ho:
+        # trade_signal = "SELL"
+
+    # ==================================================
+    # HOLD
+    # ==================================================
+
     if trade_signal == "HOLD":
+
         log_ads(
             price=entry,
             ema20=ema20,
@@ -134,68 +163,49 @@ def run_bot():
             volume=volume,
             avg_volume=avg_volume,
             volume_ratio=volume_ratio,
-            trend=trend,
+            trend="SMA44",
             signal="HOLD",
             reason=reason
         )
 
         print("\n========== SIGNAL ==========")
         print("Signal : HOLD")
+
         return
 
-    # ==========================
-    # Multi-Timeframe Confirmation
-    # ==========================
-    if trade_signal == "BUY" and not trend_buy:
-        print("❌ BUY rejected (1H trend is bearish)")
-        trade_signal = "HOLD"
-        reason = "BUY Rejected by 1H Trend"
+    # ==================================================
+    # SIGNAL CONFIRMED
+    # ==================================================
 
-    elif trade_signal == "SELL" and not trend_sell:
-        print("❌ SELL rejected (1H trend is bullish)")
-        trade_signal = "HOLD"
-        reason = "SELL Rejected by 1H Trend"
+    print("\n========== SIGNAL ==========")
+    print(f"Signal : {trade_signal}")
+    print("Confirmation : SMA44 + Candle + Volume")
 
-    if trade_signal == "HOLD":
-        log_ads(
-            price=entry,
-            ema20=ema20,
-            ema50=ema50,
-            rsi=rsi,
-            macd=macd,
-            macd_signal=macd_signal,
-            adx=adx,
-            atr=atr,
-            volume=volume,
-            avg_volume=avg_volume,
-            volume_ratio=volume_ratio,
-            trend=trend,
-            signal="HOLD",
-            reason=reason
-        )
+    # ==================================================
+    # STOP LOSS / TAKE PROFIT
+    # ==================================================
 
-        print("\n========== SIGNAL ==========")
-        print("Signal : HOLD")
-        return
-        
-    # ==========================
-    # Stop Loss / Take Profit
-    # ==========================
     if trade_signal == "BUY":
+
         sl = entry - (atr * 1.5)
+
         tp = entry + ((entry - sl) * 2)
 
     elif trade_signal == "SELL":
+
         sl = entry + (atr * 1.5)
+
         tp = entry - ((sl - entry) * 2)
 
     else:
+
         print("Unknown Signal")
         return
 
-    # ==========================
-    # Position Size
-    # ==========================
+    # ==================================================
+    # POSITION SIZE
+    # ==================================================
+
     qty = calculate_position_size(
         capital=CAPITAL,
         risk_percent=RISK_PERCENT,
@@ -203,24 +213,32 @@ def run_bot():
         stop_loss_price=sl
     )
 
-    # ==========================
-    # Print Signal
-    # ==========================
-    print("\n========== SIGNAL ==========")
-    print(f"Signal : {trade_signal}")
+    # ==================================================
+    # RISK INFORMATION
+    # ==================================================
+
+    risk_distance = abs(entry - sl)
+    reward_distance = abs(tp - entry)
 
     print("\n========== RISK ==========")
     print(f"Entry  : {entry:.2f}")
     print(f"SL     : {sl:.2f}")
     print(f"TP     : {tp:.2f}")
-    print(f"Risk   : {abs(entry-sl):.2f}")
-    print(f"Reward : {abs(tp-entry):.2f}")
-    print(f"RR     : 1 : {abs(tp-entry)/abs(entry-sl):.2f}")
+    print(f"Risk   : {risk_distance:.2f}")
+    print(f"Reward : {reward_distance:.2f}")
+
+    if risk_distance > 0:
+        print(
+            f"RR     : 1 : "
+            f"{reward_distance / risk_distance:.2f}"
+        )
+
     print(f"Qty    : {qty:.6f}")
 
-    # ==========================
-    # Execute Paper Trade
-    # ==========================
+    # ==================================================
+    # ADS LOGGER
+    # ==================================================
+
     log_ads(
         price=entry,
         ema20=ema20,
@@ -233,10 +251,14 @@ def run_bot():
         volume=volume,
         avg_volume=avg_volume,
         volume_ratio=volume_ratio,
-        trend=trend,
+        trend="SMA44",
         signal=trade_signal,
         reason=reason
     )
+
+    # ==================================================
+    # EXECUTE PAPER TRADE
+    # ==================================================
 
     paper_trade(
         trade_signal,
@@ -249,3 +271,4 @@ def run_bot():
     )
 
     print("\n[✓] Bot Cycle Completed")
+```

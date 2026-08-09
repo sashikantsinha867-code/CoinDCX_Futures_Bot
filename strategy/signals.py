@@ -1,3 +1,4 @@
+```python
 import pandas as pd
 
 
@@ -5,76 +6,236 @@ def generate_signal(df):
     """
     ==================================================
     Strategy:
-    EMA20 + EMA50 + RSI + MACD + Volume + ADX
+    1M SMA44 + Closed Candle Confirmation + Volume
     ==================================================
 
+    IMPORTANT:
+        The latest candle (-1) may still be forming.
+        Therefore, signal is generated using the
+        last CLOSED candle (-2).
+
     BUY:
-        EMA20 > EMA50
-        RSI > 55
-        MACD > MACD_SIGNAL
-        Volume > AVG_VOLUME * 1.2
-        ADX > 25
+        1. Previous closed candle interacts with SMA44
+        2. Confirmation candle closes above SMA44
+        3. Confirmation candle is bullish
+        4. Volume > previous 20-candle average * 1.2
+        5. SMA touch alone does NOT trigger entry
 
     SELL:
-        EMA20 < EMA50
-        RSI < 45
-        MACD < MACD_SIGNAL
-        Volume > AVG_VOLUME * 1.2
-        ADX > 25
+        1. Previous closed candle interacts with SMA44
+        2. Confirmation candle closes below SMA44
+        3. Confirmation candle is bearish
+        4. Volume > previous 20-candle average * 1.2
+        5. SMA touch alone does NOT trigger entry
 
     Otherwise:
         HOLD
+
+    Stop Loss / Take Profit / Breakeven /
+    Trailing SL are handled elsewhere.
     """
 
-    # Data Validation
+    # ==================================================
+    # DATA VALIDATION
+    # ==================================================
+
     if df is None or len(df) < 50:
         return "HOLD"
 
-    last = df.iloc[-1]
+    required_columns = [
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "SMA44",
+    ]
 
-    # Check NaN Values
-    if last.isnull().any():
+    for column in required_columns:
+        if column not in df.columns:
+            return "HOLD"
+
+    # Need at least:
+    # - previous candle
+    # - confirmation candle
+    if len(df) < 46:
         return "HOLD"
 
-    # Indicators
-    ema20 = last["EMA20"]
-    ema50 = last["EMA50"]
+    # ==================================================
+    # CLOSED CANDLES
+    # ==================================================
 
-    rsi = last["RSI"]
+    # Latest candle (-1) may still be forming.
+    # Use (-2) as the last CLOSED confirmation candle.
 
-    macd = last["MACD"]
-    macd_signal = last["MACD_SIGNAL"]
+    confirmation = df.iloc[-2]
+    previous = df.iloc[-3]
 
-    adx = last["ADX"]
+    # ==================================================
+    # NAN CHECK
+    # ==================================================
 
-    volume = last["volume"]
-    avg_volume = last["AVG_VOLUME"]
+    required_values = [
+        previous["open"],
+        previous["high"],
+        previous["low"],
+        previous["close"],
+        previous["SMA44"],
+        previous["volume"],
 
-    # ==========================
-    # BUY SIGNAL
-    # ==========================
+        confirmation["open"],
+        confirmation["high"],
+        confirmation["low"],
+        confirmation["close"],
+        confirmation["SMA44"],
+        confirmation["volume"],
+    ]
+
+    if any(pd.isna(value) for value in required_values):
+        return "HOLD"
+
+    # ==================================================
+    # VOLUME CONFIRMATION
+    # ==================================================
+
+    # Average volume of candles BEFORE confirmation candle.
+    # This avoids including the confirmation candle itself
+    # in its own volume average.
+
+    avg_volume = (
+        df["volume"]
+        .rolling(window=20)
+        .mean()
+        .shift(1)
+        .iloc[-2]
+    )
+
+    if pd.isna(avg_volume) or avg_volume <= 0:
+        return "HOLD"
+
+    volume_ratio = confirmation["volume"] / avg_volume
+
+    volume_confirmation = (
+        confirmation["volume"] > avg_volume * 1.2
+    )
+
+    if not volume_confirmation:
+        return "HOLD"
+
+    # ==================================================
+    # CANDLE CONFIRMATION
+    # ==================================================
+
+    bullish_candle = (
+        confirmation["close"] > confirmation["open"]
+    )
+
+    bearish_candle = (
+        confirmation["close"] < confirmation["open"]
+    )
+
+    # ==================================================
+    # BUY SETUP
+    # ==================================================
+
+    # Previous candle interacted with SMA44.
+    previous_touched_sma_buy = (
+        previous["low"] <= previous["SMA44"]
+    )
+
+    # Confirmation candle closes ABOVE SMA44
+    # and is bullish.
+
+    bullish_reclaim = (
+        bullish_candle
+        and confirmation["close"] > confirmation["SMA44"]
+    )
+
     if (
-        ema20 > ema50
-        and rsi > 55
-        and macd > macd_signal
-        and volume > avg_volume * 1.2
-        and adx > 25
+        previous_touched_sma_buy
+        and bullish_reclaim
     ):
+        print(
+            "\n🟢 SMA44 BUY CONFIRMATION"
+        )
+
+        print(
+            f"Previous Low : {previous['low']:.2f}"
+        )
+
+        print(
+            f"Previous SMA44 : {previous['SMA44']:.2f}"
+        )
+
+        print(
+            f"Confirmation Close : "
+            f"{confirmation['close']:.2f}"
+        )
+
+        print(
+            f"Confirmation SMA44 : "
+            f"{confirmation['SMA44']:.2f}"
+        )
+
+        print(
+            f"Volume Ratio : {volume_ratio:.2f}x"
+        )
+
         return "BUY"
 
-    # ==========================
-    # SELL SIGNAL
-    # ==========================
-    elif (
-        ema20 < ema50
-        and rsi < 45
-        and macd < macd_signal
-        and volume > avg_volume * 1.2
-        and adx > 25
+    # ==================================================
+    # SELL SETUP
+    # ==================================================
+
+    # Previous candle interacted with SMA44.
+
+    previous_touched_sma_sell = (
+        previous["high"] >= previous["SMA44"]
+    )
+
+    # Confirmation candle closes BELOW SMA44
+    # and is bearish.
+
+    bearish_rejection = (
+        bearish_candle
+        and confirmation["close"] < confirmation["SMA44"]
+    )
+
+    if (
+        previous_touched_sma_sell
+        and bearish_rejection
     ):
+        print(
+            "\n🔴 SMA44 SELL CONFIRMATION"
+        )
+
+        print(
+            f"Previous High : {previous['high']:.2f}"
+        )
+
+        print(
+            f"Previous SMA44 : {previous['SMA44']:.2f}"
+        )
+
+        print(
+            f"Confirmation Close : "
+            f"{confirmation['close']:.2f}"
+        )
+
+        print(
+            f"Confirmation SMA44 : "
+            f"{confirmation['SMA44']:.2f}"
+        )
+
+        print(
+            f"Volume Ratio : {volume_ratio:.2f}x"
+        )
+
         return "SELL"
 
-    # ==========================
+    # ==================================================
     # HOLD
-    # ==========================
+    # ==================================================
+
     return "HOLD"
+```

@@ -1,14 +1,35 @@
+```python
 import ta
 
 
 def add_indicators(df):
     """
-    Add technical indicators to DataFrame
+    Add technical indicators to DataFrame.
+
+    Main Strategy:
+        SMA44 + Candle Confirmation + Volume
+
+    Existing indicators:
+        EMA20
+        EMA50
+        RSI
+        MACD
+        ATR
+        ADX
+        Volume Average
+        Volume Ratio
     """
 
-    # ==========================
+    # ==================================================
+    # SMA 44
+    # ==================================================
+
+    df["SMA44"] = df["close"].rolling(window=44).mean()
+
+    # ==================================================
     # EMA
-    # ==========================
+    # ==================================================
+
     df["EMA20"] = ta.trend.ema_indicator(
         close=df["close"],
         window=20
@@ -19,17 +40,19 @@ def add_indicators(df):
         window=50
     )
 
-    # ==========================
+    # ==================================================
     # RSI
-    # ==========================
+    # ==================================================
+
     df["RSI"] = ta.momentum.rsi(
         close=df["close"],
         window=14
     )
 
-    # ==========================
+    # ==================================================
     # MACD
-    # ==========================
+    # ==================================================
+
     macd = ta.trend.MACD(
         close=df["close"],
         window_slow=26,
@@ -41,9 +64,10 @@ def add_indicators(df):
     df["MACD_SIGNAL"] = macd.macd_signal()
     df["MACD_HIST"] = macd.macd_diff()
 
-    # ==========================
+    # ==================================================
     # ATR
-    # ==========================
+    # ==================================================
+
     atr = ta.volatility.AverageTrueRange(
         high=df["high"],
         low=df["low"],
@@ -53,9 +77,10 @@ def add_indicators(df):
 
     df["ATR"] = atr.average_true_range()
 
-    # ==========================
+    # ==================================================
     # ADX
-    # ==========================
+    # ==================================================
+
     adx = ta.trend.ADXIndicator(
         high=df["high"],
         low=df["low"],
@@ -65,19 +90,29 @@ def add_indicators(df):
 
     df["ADX"] = adx.adx()
 
-    # ==========================
-    # Volume Indicators
-    # ==========================
-    df["AVG_VOLUME"] = df["volume"].rolling(window=20).mean()
+    # ==================================================
+    # VOLUME
+    # ==================================================
 
-    # Volume Ratio
+    df["AVG_VOLUME"] = (
+        df["volume"]
+        .rolling(window=20)
+        .mean()
+    )
+
+    # ==================================================
+    # VOLUME RATIO
+    # ==================================================
+
     df["VOLUME_RATIO"] = (
         df["volume"] / df["AVG_VOLUME"]
     )
 
-    # ==========================
-    # Remove NaN values
-    # ==========================
+    # ==================================================
+    # REMOVE NaN VALUES
+    # ==================================================
+
     df = df.dropna().reset_index(drop=True)
 
     return df
+```
