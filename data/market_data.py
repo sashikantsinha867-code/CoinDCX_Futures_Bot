@@ -1,4 +1,3 @@
-```python
 import pandas as pd
 from exchange.api import get_candles
 
@@ -35,4 +34,4 @@ def get_market_data(interval="1m", pair="B-BTC_USDT", limit=100):
     df = df.sort_values("time").reset_index(drop=True)
 
     return df
-```
+
