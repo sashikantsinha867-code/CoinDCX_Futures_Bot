@@ -1,4 +1,3 @@
-```python
 import pandas as pd
 
 
@@ -238,4 +237,4 @@ def generate_signal(df):
     # ==================================================
 
     return "HOLD"
-```
+

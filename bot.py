@@ -1,4 +1,3 @@
-```python
 from data.market_data import get_market_data
 from strategy.indicators import add_indicators
 from strategy.signals import generate_signal
@@ -271,4 +270,4 @@ def run_bot():
     )
 
     print("\n[✓] Bot Cycle Completed")
-```
+

@@ -1,4 +1,3 @@
-```python
 import ta
 
 
@@ -115,4 +114,4 @@ def add_indicators(df):
     df = df.dropna().reset_index(drop=True)
 
     return df
-```
+
