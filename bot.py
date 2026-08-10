@@ -3,7 +3,7 @@ from strategy.indicators import add_indicators
 from strategy.signals import generate_signal
 from strategy.risk import calculate_position_size
 from paper_trade.paper_trade import paper_trade, load_position
-from config import CAPITAL, RISK_PERCENT, TEST_MODE
+from config import CAPITAL, RISK_PERCENT, TEST_MODE, PAPER_MODE
 from utils.ads_logger import log_ads
 
 
@@ -259,6 +259,8 @@ def run_bot():
     # EXECUTE PAPER TRADE
     # ==================================================
 
+    if PAPER_MODE:
+    print("\n📝 PAPER MODE")
     paper_trade(
         trade_signal,
         entry,
@@ -268,6 +270,9 @@ def run_bot():
         sl,
         tp
     )
+else:
+    print("\n🔴 LIVE MODE")
+    print("⚠️ Live order execution is not connected yet.")
 
-    print("\n[✓] Bot Cycle Completed")
-
+if __name__ == "__main__":
+    run_bot()
