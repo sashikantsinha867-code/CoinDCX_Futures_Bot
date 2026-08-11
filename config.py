@@ -17,6 +17,7 @@ API_SECRET = os.getenv("COINDCX_API_SECRET")
 
 SYMBOL = os.getenv("SYMBOL", "BTCUSDT")
 LEVERAGE = int(os.getenv("LEVERAGE", 5))
+FUTURES_MARGIN = os.getenv("FUTURES_MARGIN", "INR").upper()
 CAPITAL = float(os.getenv("CAPITAL", 5000))
 
 RISK_PERCENT = float(os.getenv("RISK_PERCENT", 2))

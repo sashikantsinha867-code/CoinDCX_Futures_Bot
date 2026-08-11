@@ -3,7 +3,7 @@ from strategy.indicators import add_indicators
 from strategy.signals import generate_signal
 from strategy.risk import calculate_position_size
 from paper_trade.paper_trade import paper_trade, load_position
-from config import CAPITAL, RISK_PERCENT, TEST_MODE
+from config import CAPITAL, RISK_PERCENT, TEST_MODE, LEVERAGE
 from utils.ads_logger import log_ads
 
 
@@ -209,7 +209,8 @@ def run_bot():
         capital=CAPITAL,
         risk_percent=RISK_PERCENT,
         entry_price=entry,
-        stop_loss_price=sl
+        stop_loss_price=sl,
+        leverage=LEVERAGE
     )
 
     # ==================================================
