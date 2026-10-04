@@ -14,9 +14,6 @@ HEADERS = [
     "MACD_SIGNAL",
     "ADX",
     "ATR",
-    "Volume",
-    "AvgVolume",
-    "VolumeRatio",
     "Trend1H",
     "Signal",
     "Reason"
@@ -32,9 +29,6 @@ def log_ads(
     macd_signal,
     adx,
     atr,
-    volume,
-    avg_volume,
-    volume_ratio,
     trend,
     signal,
     reason
@@ -61,9 +55,6 @@ def log_ads(
             round(macd_signal, 2),
             round(adx, 2),
             round(atr, 2),
-            round(volume, 2),
-            round(avg_volume, 2),
-            round(volume_ratio, 2),
             trend,
             signal,
             reason

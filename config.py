@@ -44,12 +44,12 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TRAILING_STOP = True
 
 # Trailing start after profit moves by this many ATRs
-TRAILING_TRIGGER_ATR = 1.0
+TRAILING_TRIGGER_ATR = 1.5
 
 # Distance of trailing SL from current price (in ATR)
-TRAILING_DISTANCE_ATR = 0.8
+TRAILING_DISTANCE_ATR = 1.2
 
 # Break-even after profit moves by this many ATRs
 BREAK_EVEN_ENABLED = True
-BREAK_EVEN_TRIGGER_ATR = 1.0
+BREAK_EVEN_TRIGGER_ATR = 1.5
 

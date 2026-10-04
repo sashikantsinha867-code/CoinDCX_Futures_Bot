@@ -33,12 +33,12 @@ def safe_run_bot():
 def start_scheduler():
     print("=" * 50)
     print("CoinDCX Auto Scheduler Started")
-    print("Strategy Timeframe: 1 Minute")
+    print("Strategy Timeframe: 5 Minutes")
     print("Strategy: SMA44 + Candle Confirmation + Volume")
     print("=" * 50)
 
-    # Run bot every 1 minute
-    schedule.every(1).minute.do(safe_run_bot)
+    # Run bot every 5 minutes
+    schedule.every(5).minutes.do(safe_run_bot)
 
     # Run once immediately when bot starts
     safe_run_bot()
